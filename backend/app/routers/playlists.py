@@ -10,7 +10,7 @@ from app.embed import embed_tracks, public_tracks
 from app.enrich import enrich_tracks
 from app.playlist_url import extract_playlist_id
 from app.routers.auth import require_access_token, session_id_from_request
-from app.sessions import get_last_playlist, store_last_playlist
+from app.sessions import get_debug_playlist, get_last_playlist, store_last_playlist
 from app.similarity import nearest_in_playlist
 from app.spotify import (
     fetch_me,
@@ -108,7 +108,7 @@ async def list_playlists(access_token: str = Depends(require_access_token)) -> d
 
 @router.get("/embeddings")
 async def view_embeddings() -> Response:
-    playlist = get_last_playlist(None)
+    playlist = get_debug_playlist()
     if not playlist:
         raise HTTPException(
             status_code=404,
@@ -142,8 +142,16 @@ def _public_neighbor(score: float, item: dict) -> dict:
 
 
 @router.get("/spotify/similar/{track_id}")
-async def similar_tracks(track_id: str, limit: int = 5) -> dict:
-    playlist = get_last_playlist(None)
+async def similar_tracks(
+    request: Request,
+    track_id: str,
+    limit: int = 5,
+) -> dict:
+    session_id = session_id_from_request(request)
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    playlist = get_last_playlist(session_id)
     if not playlist:
         raise HTTPException(
             status_code=404,

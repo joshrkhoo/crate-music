@@ -139,4 +139,6 @@ def map_track(item: dict) -> dict | None:
         "name": track.get("name") or "Unknown track",
         "artists": artists,
         "album": album.get("name") or "",
+        "album_id": album.get("id"),
+        "release_date": album.get("release_date"),
     }

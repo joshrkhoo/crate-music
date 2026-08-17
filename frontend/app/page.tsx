@@ -27,10 +27,16 @@ type Track = {
   album: string;
 };
 
+type EnrichedTrack = {
+  track: Track;
+  release_year: number | null;
+  genres: string[];
+};
+
 type PlaylistImport = {
   id: string;
   name: string;
-  tracks: Track[];
+  tracks: EnrichedTrack[];
 };
 
 export default function Home() {
@@ -247,12 +253,29 @@ export default function Home() {
           <p className="mt-1 text-sm text-neutral-500">
             {imported.tracks.length} tracks
           </p>
-          <ul className="mt-4 space-y-2">
-            {imported.tracks.map((track, index) => (
-              <li key={`${track.id}-${index}`} className="text-sm">
-                {track.name} — {track.artists.map((artist) => artist.name).join(", ") || "Unknown artist"}
-              </li>
-            ))}
+          <ul className="mt-4 space-y-3">
+            {imported.tracks.map((item, index) => {
+              const artists =
+                item.track.artists.map((artist) => artist.name).join(", ") ||
+                "Unknown artist";
+              const meta = [
+                item.release_year,
+                item.genres.length ? item.genres.join(", ") : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+
+              return (
+                <li key={`${item.track.id}-${index}`} className="text-sm">
+                  <p>
+                    {item.track.name} — {artists}
+                  </p>
+                  {meta ? (
+                    <p className="mt-0.5 text-neutral-500">{meta}</p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}

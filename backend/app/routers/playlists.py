@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
+from app.enrich import enrich_tracks
 from app.playlist_url import extract_playlist_id
 from app.routers.auth import require_access_token
 from app.spotify import (
@@ -86,7 +87,7 @@ async def load_playlist_tracks(access_token: str, playlist_id: str) -> tuple[str
         if not payload.get("next"):
             break
 
-    return name, tracks
+    return name, await enrich_tracks(access_token, tracks)
 
 
 @router.get("/spotify/playlists")

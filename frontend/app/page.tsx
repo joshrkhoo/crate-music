@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+import { apiFetch, clearSessionId, loginUrl, setSessionId } from "@/lib/api";
 
 type SpotifyUser = {
   id: string;
@@ -18,13 +18,18 @@ export default function Home() {
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loginUrl = useMemo(() => `${API_URL}/auth/spotify/login`, []);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const oauthError = params.get("error");
+    const sid = params.get("sid");
+
+    if (sid) {
+      setSessionId(sid);
+    }
     if (oauthError) {
       setError(oauthError);
+    }
+    if (sid || oauthError) {
       window.history.replaceState({}, "", "/");
     }
 
@@ -35,10 +40,7 @@ export default function Home() {
       controller.abort();
     }, 4000);
 
-    fetch(`${API_URL}/auth/me`, {
-      credentials: "include",
-      signal: controller.signal,
-    })
+    apiFetch("/auth/me", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
           setUser(null);
@@ -73,10 +75,8 @@ export default function Home() {
   }, []);
 
   async function logout() {
-    await fetch(`${API_URL}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
+    await apiFetch("/auth/logout", { method: "POST" });
+    clearSessionId();
     setUser(null);
   }
 
@@ -109,7 +109,7 @@ export default function Home() {
           </div>
         ) : (
           <a
-            href={loginUrl}
+            href={loginUrl()}
             className="inline-flex rounded-full bg-[#1DB954] px-5 py-2.5 text-sm font-medium text-black hover:bg-[#1ed760]"
           >
             Connect Spotify

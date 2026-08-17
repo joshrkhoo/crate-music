@@ -33,9 +33,27 @@ from app.spotify import (
 router = APIRouter()
 
 
-def _frontend_redirect(error: str | None = None) -> RedirectResponse:
-    url = FRONTEND_URL if not error else f"{FRONTEND_URL}/?error={error}"
+def _frontend_redirect(
+    *,
+    error: str | None = None,
+    session_id: str | None = None,
+) -> RedirectResponse:
+    params: dict[str, str] = {}
+    if error:
+        params["error"] = error
+    if session_id:
+        params["sid"] = session_id
+    url = FRONTEND_URL if not params else f"{FRONTEND_URL}/?{urlencode(params)}"
     return RedirectResponse(url, status_code=302)
+
+
+def session_id_from_request(request: Request) -> str | None:
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        if token:
+            return token
+    return request.cookies.get(SESSION_COOKIE)
 
 
 def _set_session_cookie(response: RedirectResponse | JSONResponse, session_id: str) -> None:
@@ -55,7 +73,7 @@ def _clear_session_cookie(response: JSONResponse) -> None:
 
 
 async def valid_access_token(request: Request) -> str | None:
-    session_id = request.cookies.get(SESSION_COOKIE)
+    session_id = session_id_from_request(request)
     tokens = get_session(session_id)
     if not tokens:
         return None
@@ -104,18 +122,18 @@ async def spotify_callback(
     error: str | None = None,
 ) -> RedirectResponse:
     if error:
-        return _frontend_redirect(error)
+        return _frontend_redirect(error=error)
 
     if not code or not consume_oauth_state(state):
-        return _frontend_redirect("invalid_state")
+        return _frontend_redirect(error="invalid_state")
 
     try:
         payload = await exchange_code(code)
     except httpx.HTTPError:
-        return _frontend_redirect("token_exchange_failed")
+        return _frontend_redirect(error="token_exchange_failed")
 
     session_id = create_session(tokens_from_spotify(payload))
-    response = _frontend_redirect()
+    response = _frontend_redirect(session_id=session_id)
     _set_session_cookie(response, session_id)
     return response
 
@@ -129,7 +147,7 @@ async def me(request: Request) -> JSONResponse:
     try:
         profile = await fetch_me(access_token)
     except httpx.HTTPError:
-        delete_session(request.cookies.get(SESSION_COOKIE))
+        delete_session(session_id_from_request(request))
         return JSONResponse({"authenticated": False})
 
     return JSONResponse(
@@ -144,7 +162,7 @@ async def me(request: Request) -> JSONResponse:
 
 @router.post("/auth/logout")
 async def logout(request: Request) -> JSONResponse:
-    delete_session(request.cookies.get(SESSION_COOKIE))
+    delete_session(session_id_from_request(request))
     response = JSONResponse({"ok": True})
     _clear_session_cookie(response)
     return response

@@ -1,11 +1,16 @@
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 import httpx
+import asyncio
+import json
 
+from app.embed import embed_tracks, public_tracks
 from app.enrich import enrich_tracks
 from app.playlist_url import extract_playlist_id
-from app.routers.auth import require_access_token
+from app.routers.auth import require_access_token, session_id_from_request
+from app.sessions import get_last_playlist, store_last_playlist
 from app.spotify import (
     fetch_me,
     fetch_my_playlists_page,
@@ -100,8 +105,38 @@ async def list_playlists(access_token: str = Depends(require_access_token)) -> d
     return {"playlists": playlists}
 
 
+@router.get("/embeddings")
+async def view_embeddings() -> Response:
+    playlist = get_last_playlist(None)
+    if not playlist:
+        raise HTTPException(
+            status_code=404,
+            detail="No playlist in memory. Analyse a playlist first.",
+        )
+
+    payload = {
+        "id": playlist["id"],
+        "name": playlist["name"],
+        "tracks": [
+            {
+                "id": item["track"]["id"],
+                "name": item["track"]["name"],
+                "artists": [artist["name"] for artist in item["track"]["artists"]],
+                "dim": len(item.get("metadata_embedding") or []),
+                "embedding": item.get("metadata_embedding"),
+            }
+            for item in playlist["tracks"]
+        ],
+    }
+    return Response(
+        content=json.dumps(payload, indent=2),
+        media_type="application/json",
+    )
+
+
 @router.post("/spotify/playlist")
 async def import_playlist(
+    request: Request,
     body: PlaylistImportRequest,
     access_token: str = Depends(require_access_token),
 ) -> dict:
@@ -116,8 +151,14 @@ async def import_playlist(
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Could not read that playlist from Spotify.")
 
+    embedded = await asyncio.to_thread(embed_tracks, tracks)
+    store_last_playlist(
+        session_id_from_request(request),
+        {"id": playlist_id, "name": name, "tracks": embedded},
+    )
+
     return {
         "id": playlist_id,
         "name": name,
-        "tracks": tracks,
+        "tracks": public_tracks(embedded),
     }

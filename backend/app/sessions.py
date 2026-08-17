@@ -8,6 +8,8 @@ PENDING_OAUTH_TTL = 60 * 10
 
 _sessions: dict[str, dict[str, Any]] = {}
 _pending_oauth: dict[str, float] = {}
+_last_playlists: dict[str, dict[str, Any]] = {}
+_latest_playlist: dict[str, Any] | None = None
 
 
 def create_session(data: dict[str, Any]) -> str:
@@ -29,6 +31,20 @@ def update_session(session_id: str, data: dict[str, Any]) -> None:
 def delete_session(session_id: str | None) -> None:
     if session_id:
         _sessions.pop(session_id, None)
+        _last_playlists.pop(session_id, None)
+
+
+def store_last_playlist(session_id: str | None, playlist: dict[str, Any]) -> None:
+    global _latest_playlist
+    _latest_playlist = playlist
+    if session_id:
+        _last_playlists[session_id] = playlist
+
+
+def get_last_playlist(session_id: str | None) -> dict[str, Any] | None:
+    if session_id and session_id in _last_playlists:
+        return _last_playlists[session_id]
+    return _latest_playlist
 
 
 def remember_oauth_state(state: str) -> None:

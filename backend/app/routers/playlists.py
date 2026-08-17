@@ -11,6 +11,7 @@ from app.enrich import enrich_tracks
 from app.playlist_url import extract_playlist_id
 from app.routers.auth import require_access_token, session_id_from_request
 from app.sessions import get_last_playlist, store_last_playlist
+from app.similarity import nearest_in_playlist
 from app.spotify import (
     fetch_me,
     fetch_my_playlists_page,
@@ -132,6 +133,32 @@ async def view_embeddings() -> Response:
         content=json.dumps(payload, indent=2),
         media_type="application/json",
     )
+
+
+def _public_neighbor(score: float, item: dict) -> dict:
+    public = public_tracks([item])[0]
+    public["similarity"] = round(score, 4)
+    return public
+
+
+@router.get("/spotify/similar/{track_id}")
+async def similar_tracks(track_id: str, limit: int = 5) -> dict:
+    playlist = get_last_playlist(None)
+    if not playlist:
+        raise HTTPException(
+            status_code=404,
+            detail="No playlist in memory. Analyse a playlist first.",
+        )
+
+    try:
+        query, neighbors = nearest_in_playlist(playlist["tracks"], track_id, limit=limit)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That track is not in the analysed playlist.")
+
+    return {
+        "track": public_tracks([query])[0],
+        "neighbors": [_public_neighbor(score, item) for score, item in neighbors],
+    }
 
 
 @router.post("/spotify/playlist")

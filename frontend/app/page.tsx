@@ -33,6 +33,13 @@ type EnrichedTrack = {
   genres: string[];
 };
 
+type SimilarNeighbor = EnrichedTrack & { similarity: number };
+
+type SimilarResponse = {
+  track: EnrichedTrack;
+  neighbors: SimilarNeighbor[];
+};
+
 type PlaylistImport = {
   id: string;
   name: string;
@@ -46,6 +53,8 @@ export default function Home() {
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<PlaylistImport | null>(null);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [similar, setSimilar] = useState<SimilarResponse | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,6 +116,8 @@ export default function Home() {
     if (!user) {
       setPlaylists([]);
       setImported(null);
+      setSelectedTrackId(null);
+      setSimilar(null);
       return;
     }
 
@@ -129,6 +140,8 @@ export default function Home() {
     setUser(null);
     setImported(null);
     setPlaylistUrl("");
+    setSelectedTrackId(null);
+    setSimilar(null);
   }
 
   async function analysePlaylist(event: FormEvent) {
@@ -136,6 +149,8 @@ export default function Home() {
     setError(null);
     setImporting(true);
     setImported(null);
+    setSelectedTrackId(null);
+    setSimilar(null);
 
     try {
       const response = await apiFetch("/spotify/playlist", {
@@ -152,6 +167,24 @@ export default function Home() {
       setError("Could not reach the API. Is the backend running?");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function showSimilar(trackId: string) {
+    setSelectedTrackId(trackId);
+    setError(null);
+    try {
+      const response = await apiFetch(`/spotify/similar/${trackId}`);
+      const data = await response.json();
+      if (!response.ok) {
+        setSimilar(null);
+        setError(typeof data.detail === "string" ? data.detail : "Could not find similar tracks.");
+        return;
+      }
+      setSimilar(data as SimilarResponse);
+    } catch {
+      setSimilar(null);
+      setError("Could not reach the API. Is the backend running?");
     }
   }
 
@@ -251,7 +284,7 @@ export default function Home() {
         <section className="mt-8">
           <h2 className="text-xl font-medium">{imported.name}</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {imported.tracks.length} tracks
+            {imported.tracks.length} tracks · click a song to see the closest in this playlist
           </p>
           <ul className="mt-4 space-y-3">
             {imported.tracks.map((item, index) => {
@@ -264,19 +297,66 @@ export default function Home() {
               ]
                 .filter(Boolean)
                 .join(" · ");
+              const selected = selectedTrackId === item.track.id;
 
               return (
-                <li key={`${item.track.id}-${index}`} className="text-sm">
-                  <p>
-                    {item.track.name} — {artists}
-                  </p>
-                  {meta ? (
-                    <p className="mt-0.5 text-neutral-500">{meta}</p>
-                  ) : null}
+                <li key={`${item.track.id}-${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => showSimilar(item.track.id)}
+                    className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+                      selected ? "bg-neutral-100 dark:bg-neutral-900" : ""
+                    }`}
+                  >
+                    <p>
+                      {item.track.name} — {artists}
+                    </p>
+                    {meta ? (
+                      <p className="mt-0.5 text-neutral-500">{meta}</p>
+                    ) : null}
+                  </button>
                 </li>
               );
             })}
           </ul>
+        </section>
+      ) : null}
+
+      {similar ? (
+        <section className="mt-8">
+          <h2 className="text-xl font-medium">Closest in this playlist</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            to {similar.track.track.name}
+          </p>
+          {similar.neighbors.length === 0 ? (
+            <p className="mt-4 text-sm text-neutral-500">
+              Need at least two tracks to compare.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {similar.neighbors.map((item, index) => {
+                const artists =
+                  item.track.artists.map((artist) => artist.name).join(", ") ||
+                  "Unknown artist";
+                const meta = [
+                  `${Math.round(item.similarity * 100)}%`,
+                  item.release_year,
+                  item.genres.length ? item.genres.join(", ") : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+
+                return (
+                  <li key={`${item.track.id}-${index}`} className="text-sm">
+                    <p>
+                      {item.track.name} — {artists}
+                    </p>
+                    <p className="mt-0.5 text-neutral-500">{meta}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       ) : null}
     </main>

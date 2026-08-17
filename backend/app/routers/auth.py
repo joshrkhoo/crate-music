@@ -11,14 +11,23 @@ from app.config import (
     SPOTIFY_REDIRECT_URI,
     SPOTIFY_SCOPES,
 )
+from app.sessions import (
+    SESSION_COOKIE,
+    SESSION_MAX_AGE,
+    consume_oauth_state,
+    create_session,
+    delete_session,
+    get_session,
+    remember_oauth_state,
+    update_session,
+)
 from app.spotify import (
     access_token_expired,
     exchange_code,
     fetch_me,
-    generate_pkce,
     generate_state,
     refresh_access_token,
-    session_tokens_from_spotify,
+    tokens_from_spotify,
 )
 
 router = APIRouter()
@@ -29,8 +38,25 @@ def _frontend_redirect(error: str | None = None) -> RedirectResponse:
     return RedirectResponse(url, status_code=302)
 
 
+def _set_session_cookie(response: RedirectResponse | JSONResponse, session_id: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_id,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: JSONResponse) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
 async def valid_access_token(request: Request) -> str | None:
-    tokens = request.session.get("spotify")
+    session_id = request.cookies.get(SESSION_COOKIE)
+    tokens = get_session(session_id)
     if not tokens:
         return None
 
@@ -38,28 +64,25 @@ async def valid_access_token(request: Request) -> str | None:
         return tokens["access_token"]
 
     refresh_token = tokens.get("refresh_token")
-    if not refresh_token:
-        request.session.pop("spotify", None)
+    if not session_id or not refresh_token:
+        delete_session(session_id)
         return None
 
     try:
         payload = await refresh_access_token(refresh_token)
     except httpx.HTTPError:
-        request.session.pop("spotify", None)
+        delete_session(session_id)
         return None
 
-    request.session["spotify"] = session_tokens_from_spotify(
-        payload, previous_refresh=refresh_token
-    )
-    return request.session["spotify"]["access_token"]
+    updated = tokens_from_spotify(payload, previous_refresh=refresh_token)
+    update_session(session_id, updated)
+    return updated["access_token"]
 
 
 @router.get("/auth/spotify/login")
-async def spotify_login(request: Request) -> RedirectResponse:
-    verifier, challenge = generate_pkce()
+async def spotify_login() -> RedirectResponse:
     state = generate_state()
-    request.session["oauth_state"] = state
-    request.session["code_verifier"] = verifier
+    remember_oauth_state(state)
 
     params = {
         "client_id": SPOTIFY_CLIENT_ID,
@@ -67,8 +90,6 @@ async def spotify_login(request: Request) -> RedirectResponse:
         "redirect_uri": SPOTIFY_REDIRECT_URI,
         "scope": SPOTIFY_SCOPES,
         "state": state,
-        "code_challenge_method": "S256",
-        "code_challenge": challenge,
     }
     return RedirectResponse(
         f"{SPOTIFY_AUTHORIZE_URL}?{urlencode(params)}",
@@ -78,7 +99,6 @@ async def spotify_login(request: Request) -> RedirectResponse:
 
 @router.get("/auth/spotify/callback")
 async def spotify_callback(
-    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -86,20 +106,18 @@ async def spotify_callback(
     if error:
         return _frontend_redirect(error)
 
-    expected_state = request.session.get("oauth_state")
-    verifier = request.session.pop("code_verifier", None)
-    request.session.pop("oauth_state", None)
-
-    if not code or not verifier or state != expected_state:
+    if not code or not consume_oauth_state(state):
         return _frontend_redirect("invalid_state")
 
     try:
-        payload = await exchange_code(code, verifier)
+        payload = await exchange_code(code)
     except httpx.HTTPError:
         return _frontend_redirect("token_exchange_failed")
 
-    request.session["spotify"] = session_tokens_from_spotify(payload)
-    return _frontend_redirect()
+    session_id = create_session(tokens_from_spotify(payload))
+    response = _frontend_redirect()
+    _set_session_cookie(response, session_id)
+    return response
 
 
 @router.get("/auth/me")
@@ -111,7 +129,7 @@ async def me(request: Request) -> JSONResponse:
     try:
         profile = await fetch_me(access_token)
     except httpx.HTTPError:
-        request.session.pop("spotify", None)
+        delete_session(request.cookies.get(SESSION_COOKIE))
         return JSONResponse({"authenticated": False})
 
     return JSONResponse(
@@ -126,5 +144,7 @@ async def me(request: Request) -> JSONResponse:
 
 @router.post("/auth/logout")
 async def logout(request: Request) -> JSONResponse:
-    request.session.clear()
-    return JSONResponse({"ok": True})
+    delete_session(request.cookies.get(SESSION_COOKIE))
+    response = JSONResponse({"ok": True})
+    _clear_session_cookie(response)
+    return response

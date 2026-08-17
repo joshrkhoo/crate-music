@@ -17,8 +17,6 @@ SPOTIFY_CLIENT_ID = _require("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = _require("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = _require("SPOTIFY_REDIRECT_URI")
 FRONTEND_URL = _require("FRONTEND_URL").rstrip("/")
-SESSION_SECRET = _require("SESSION_SECRET")
-
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_ME_URL = "https://api.spotify.com/v1/me"

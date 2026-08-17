@@ -1,5 +1,3 @@
-import base64
-import hashlib
 import secrets
 import time
 
@@ -14,21 +12,11 @@ from app.config import (
 )
 
 
-def generate_pkce() -> tuple[str, str]:
-    verifier = secrets.token_urlsafe(64)
-    challenge = (
-        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
-        .rstrip(b"=")
-        .decode()
-    )
-    return verifier, challenge
-
-
 def generate_state() -> str:
     return secrets.token_urlsafe(24)
 
 
-async def exchange_code(code: str, code_verifier: str) -> dict:
+async def exchange_code(code: str) -> dict:
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.post(
             SPOTIFY_TOKEN_URL,
@@ -38,7 +26,6 @@ async def exchange_code(code: str, code_verifier: str) -> dict:
                 "redirect_uri": SPOTIFY_REDIRECT_URI,
                 "client_id": SPOTIFY_CLIENT_ID,
                 "client_secret": SPOTIFY_CLIENT_SECRET,
-                "code_verifier": code_verifier,
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -72,7 +59,7 @@ async def fetch_me(access_token: str) -> dict:
         return response.json()
 
 
-def session_tokens_from_spotify(payload: dict, previous_refresh: str | None = None) -> dict:
+def tokens_from_spotify(payload: dict, previous_refresh: str | None = None) -> dict:
     expires_in = int(payload.get("expires_in", 3600))
     return {
         "access_token": payload["access_token"],

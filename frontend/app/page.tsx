@@ -29,7 +29,11 @@ export default function Home() {
     }
 
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 4000);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 4000);
 
     fetch(`${API_URL}/auth/me`, {
       credentials: "include",
@@ -53,7 +57,9 @@ export default function Home() {
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") {
-          setError("Could not reach the API. Is the backend running?");
+          if (timedOut) {
+            setError("Could not reach the API. Is the backend running?");
+          }
           return;
         }
         setError("Could not reach the API. Is the backend running?");

@@ -20,6 +20,7 @@ FRONTEND_URL = _require("FRONTEND_URL").rstrip("/")
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_ME_URL = "https://api.spotify.com/v1/me"
+SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 SPOTIFY_SCOPES = " ".join(
     [
         "playlist-read-private",

@@ -1,7 +1,7 @@
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import (
@@ -95,6 +95,13 @@ async def valid_access_token(request: Request) -> str | None:
     updated = tokens_from_spotify(payload, previous_refresh=refresh_token)
     update_session(session_id, updated)
     return updated["access_token"]
+
+
+async def require_access_token(request: Request) -> str:
+    token = await valid_access_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return token
 
 
 @router.get("/auth/spotify/login")

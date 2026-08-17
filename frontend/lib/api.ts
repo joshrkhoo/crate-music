@@ -22,6 +22,9 @@ export function apiFetch(path: string, init: RequestInit = {}) {
   if (sessionId) {
     headers.set("Authorization", `Bearer ${sessionId}`);
   }
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   return fetch(`${API_URL}${path}`, {
     ...init,

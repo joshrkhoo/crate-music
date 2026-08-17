@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import FRONTEND_URL
 from app.routers.auth import router as auth_router
+from app.routers.playlists import router as playlists_router
 
 app = FastAPI(title="crate-music")
 
@@ -15,6 +16,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(playlists_router)
 
 
 @app.get("/health")

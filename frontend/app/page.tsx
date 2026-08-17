@@ -46,6 +46,26 @@ type PlaylistImport = {
   tracks: EnrichedTrack[];
 };
 
+function useLoadingDots(active: boolean) {
+  const [dots, setDots] = useState(".");
+
+  useEffect(() => {
+    if (!active) {
+      setDots(".");
+      return;
+    }
+    const frames = [".", "..", "..."];
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index = (index + 1) % frames.length;
+      setDots(frames[index]);
+    }, 400);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  return dots;
+}
+
 export default function Home() {
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +77,8 @@ export default function Home() {
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
   const [recommendations, setRecommendations] = useState<SimilarNeighbor[] | null>(null);
   const [recommending, setRecommending] = useState(false);
+  const analysingDots = useLoadingDots(importing);
+  const recommendingDots = useLoadingDots(recommending);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -300,7 +322,7 @@ export default function Home() {
               disabled={importing}
               className="rounded-full bg-[#1DB954] px-5 py-2.5 text-sm font-medium text-black hover:bg-[#1ed760] disabled:opacity-60"
             >
-              {importing ? "Analysing…" : "Analyse"}
+              {importing ? `Analysing${analysingDots}` : "Analyse"}
             </button>
           </form>
         ) : null}
@@ -320,7 +342,7 @@ export default function Home() {
             disabled={recommending}
             className="mt-4 rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
           >
-            {recommending ? "Finding new songs…" : "Recommend new songs"}
+            {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}
           </button>
           {recommending ? (
             <p className="mt-2 text-sm text-neutral-500">

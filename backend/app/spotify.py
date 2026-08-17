@@ -80,13 +80,22 @@ def _auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-async def fetch_playlist(access_token: str, playlist_id: str) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=20) as client:
-        return await client.get(
+async def fetch_playlist(
+    access_token: str,
+    playlist_id: str,
+    client: httpx.AsyncClient | None = None,
+) -> httpx.Response:
+    async def _get(http: httpx.AsyncClient) -> httpx.Response:
+        return await http.get(
             f"{SPOTIFY_API_BASE}/playlists/{playlist_id}",
             headers=_auth_headers(access_token),
             params={"fields": "id,name,owner(id),collaborative"},
         )
+
+    if client is None:
+        async with httpx.AsyncClient(timeout=20) as owned:
+            return await _get(owned)
+    return await _get(client)
 
 
 async def fetch_playlist_items_page(
@@ -94,9 +103,10 @@ async def fetch_playlist_items_page(
     playlist_id: str,
     offset: int = 0,
     limit: int = 50,
+    client: httpx.AsyncClient | None = None,
 ) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=20) as client:
-        return await client.get(
+    async def _get(http: httpx.AsyncClient) -> httpx.Response:
+        return await http.get(
             f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items",
             headers=_auth_headers(access_token),
             params={
@@ -104,6 +114,11 @@ async def fetch_playlist_items_page(
                 "offset": offset,
             },
         )
+
+    if client is None:
+        async with httpx.AsyncClient(timeout=20) as owned:
+            return await _get(owned)
+    return await _get(client)
 
 
 async def fetch_my_playlists_page(
@@ -133,18 +148,26 @@ def map_spotify_track(track: dict) -> dict | None:
             artists.append({"id": artist["id"], "name": artist["name"]})
 
     album = track.get("album") or {}
+    release_date = album.get("release_date") or track.get("release_date")
     return {
         "id": track["id"],
         "name": track.get("name") or "Unknown track",
         "artists": artists,
         "album": album.get("name") or "",
         "album_id": album.get("id"),
-        "release_date": album.get("release_date"),
+        "release_date": release_date,
     }
 
 
 def map_track(item: dict) -> dict | None:
-    return map_spotify_track(item.get("item") or item.get("track") or {})
+    if not isinstance(item, dict):
+        return None
+    payload = item.get("item") or item.get("track") or item
+    if isinstance(payload, dict) and not payload.get("id"):
+        nested = payload.get("item") or payload.get("track")
+        if isinstance(nested, dict):
+            payload = nested
+    return map_spotify_track(payload if isinstance(payload, dict) else {})
 
 
 async def search_track(

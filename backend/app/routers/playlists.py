@@ -75,24 +75,51 @@ async def load_playlist_tracks(access_token: str, playlist_id: str) -> tuple[str
     playlist = meta.json()
     name = playlist.get("name") or "Untitled playlist"
     tracks: list[dict] = []
-    offset = 0
 
-    while True:
-        page = await fetch_playlist_items_page(access_token, playlist_id, offset=offset)
-        if page.status_code == 403:
+    async with httpx.AsyncClient(timeout=20) as client:
+        first = await fetch_playlist_items_page(
+            access_token,
+            playlist_id,
+            offset=0,
+            client=client,
+        )
+        if first.status_code == 403:
             raise HTTPException(status_code=403, detail=OWNERSHIP_ERROR)
-        if page.status_code >= 400:
+        if first.status_code >= 400:
             raise HTTPException(status_code=502, detail="Could not read playlist tracks from Spotify.")
 
-        payload = page.json()
+        payload = first.json()
         for item in payload.get("items") or []:
             mapped = map_track(item)
             if mapped:
                 tracks.append(mapped)
 
-        offset += len(payload.get("items") or [])
-        if not payload.get("next"):
-            break
+        total = int(payload.get("total") or 0)
+        extra_offsets = list(range(50, total, 50)) if total > 50 else []
+        if extra_offsets:
+            pages = await asyncio.gather(
+                *(
+                    fetch_playlist_items_page(
+                        access_token,
+                        playlist_id,
+                        offset=offset,
+                        client=client,
+                    )
+                    for offset in extra_offsets
+                )
+            )
+            for page in pages:
+                if page.status_code == 403:
+                    raise HTTPException(status_code=403, detail=OWNERSHIP_ERROR)
+                if page.status_code >= 400:
+                    raise HTTPException(
+                        status_code=502,
+                        detail="Could not read playlist tracks from Spotify.",
+                    )
+                for item in (page.json().get("items") or []):
+                    mapped = map_track(item)
+                    if mapped:
+                        tracks.append(mapped)
 
     return name, await enrich_tracks(access_token, tracks)
 

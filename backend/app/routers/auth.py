@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import (
+    COOKIE_SECURE,
     FRONTEND_URL,
     SPOTIFY_AUTHORIZE_URL,
     SPOTIFY_CLIENT_ID,
@@ -63,13 +64,19 @@ def _set_session_cookie(response: RedirectResponse | JSONResponse, session_id: s
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=COOKIE_SECURE,
         path="/",
     )
 
 
 def _clear_session_cookie(response: JSONResponse) -> None:
-    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 async def valid_access_token(request: Request) -> str | None:

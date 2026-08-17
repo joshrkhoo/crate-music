@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import FRONTEND_URL
+from app.config import cors_allow_origins
 from app.routers.auth import router as auth_router
 from app.routers.playlists import router as playlists_router
 
@@ -9,7 +9,7 @@ app = FastAPI(title="crate-music")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],

@@ -28,3 +28,5 @@ SPOTIFY_SCOPES = " ".join(
         "user-read-private",
     ]
 )
+LASTFM_API_KEY = os.getenv("LASTFM_API_KEY", "").strip()
+LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/"

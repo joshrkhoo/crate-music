@@ -24,3 +24,29 @@ def nearest_in_playlist(
 
     scored.sort(key=lambda item: item[0], reverse=True)
     return query, scored[:limit]
+
+
+def max_similarity_to_playlist(
+    playlist_tracks: list[dict],
+    candidates: list[dict],
+    limit: int = 10,
+) -> list[tuple[float, dict]]:
+    seeds = [
+        np.array(track["metadata_embedding"], dtype=np.float64)
+        for track in playlist_tracks
+        if track.get("metadata_embedding")
+    ]
+    if not seeds:
+        return []
+
+    scored: list[tuple[float, dict]] = []
+    for candidate in candidates:
+        embedding = candidate.get("metadata_embedding")
+        if not embedding:
+            continue
+        vector = np.array(embedding, dtype=np.float64)
+        similarity = max(float(np.dot(vector, seed)) for seed in seeds)
+        scored.append((max(-1.0, min(1.0, similarity)), candidate))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return scored[:limit]

@@ -121,8 +121,7 @@ async def fetch_my_playlists_page(
         return response.json()
 
 
-def map_track(item: dict) -> dict | None:
-    track = item.get("item") or item.get("track")
+def map_spotify_track(track: dict) -> dict | None:
     if not isinstance(track, dict):
         return None
     if track.get("type") not in (None, "track") or not track.get("id"):
@@ -142,3 +141,38 @@ def map_track(item: dict) -> dict | None:
         "album_id": album.get("id"),
         "release_date": album.get("release_date"),
     }
+
+
+def map_track(item: dict) -> dict | None:
+    return map_spotify_track(item.get("item") or item.get("track") or {})
+
+
+async def search_track(
+    access_token: str,
+    name: str,
+    artist: str,
+    client: httpx.AsyncClient | None = None,
+) -> dict | None:
+    name = name.replace('"', " ").strip()
+    artist = artist.replace('"', " ").strip()
+    if not name or not artist:
+        return None
+    query = f'track:"{name}" artist:"{artist}"'
+
+    async def _search(http: httpx.AsyncClient) -> dict | None:
+        response = await http.get(
+            f"{SPOTIFY_API_BASE}/search",
+            headers=_auth_headers(access_token),
+            params={"q": query, "type": "track", "limit": 1},
+        )
+        if response.status_code >= 400:
+            return None
+        items = ((response.json().get("tracks") or {}).get("items") or [])
+        if not items:
+            return None
+        return map_spotify_track(items[0])
+
+    if client is None:
+        async with httpx.AsyncClient(timeout=20) as owned:
+            return await _search(owned)
+    return await _search(client)

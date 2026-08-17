@@ -55,6 +55,8 @@ export default function Home() {
   const [imported, setImported] = useState<PlaylistImport | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
+  const [recommendations, setRecommendations] = useState<SimilarNeighbor[] | null>(null);
+  const [recommending, setRecommending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -118,6 +120,7 @@ export default function Home() {
       setImported(null);
       setSelectedTrackId(null);
       setSimilar(null);
+      setRecommendations(null);
       return;
     }
 
@@ -142,6 +145,7 @@ export default function Home() {
     setPlaylistUrl("");
     setSelectedTrackId(null);
     setSimilar(null);
+    setRecommendations(null);
   }
 
   async function analysePlaylist(event: FormEvent) {
@@ -151,6 +155,7 @@ export default function Home() {
     setImported(null);
     setSelectedTrackId(null);
     setSimilar(null);
+    setRecommendations(null);
 
     try {
       const response = await apiFetch("/spotify/playlist", {
@@ -185,6 +190,29 @@ export default function Home() {
     } catch {
       setSimilar(null);
       setError("Could not reach the API. Is the backend running?");
+    }
+  }
+
+  async function recommendNewSongs() {
+    setError(null);
+    setRecommending(true);
+    setRecommendations(null);
+    try {
+      const response = await apiFetch("/spotify/recommend", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Could not get recommendations.",
+        );
+        return;
+      }
+      setRecommendations((data.recommendations ?? []) as SimilarNeighbor[]);
+    } catch {
+      setError("Could not reach the API. Is the backend running?");
+    } finally {
+      setRecommending(false);
     }
   }
 
@@ -286,6 +314,19 @@ export default function Home() {
           <p className="mt-1 text-sm text-neutral-500">
             {imported.tracks.length} tracks · click a song to see the closest in this playlist
           </p>
+          <button
+            type="button"
+            onClick={recommendNewSongs}
+            disabled={recommending}
+            className="mt-4 rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
+          >
+            {recommending ? "Finding new songs…" : "Recommend new songs"}
+          </button>
+          {recommending ? (
+            <p className="mt-2 text-sm text-neutral-500">
+              Last.fm + Spotify search. First run can take 20–40 seconds.
+            </p>
+          ) : null}
           <ul className="mt-4 space-y-3">
             {imported.tracks.map((item, index) => {
               const artists =
@@ -335,6 +376,44 @@ export default function Home() {
           ) : (
             <ul className="mt-4 space-y-3">
               {similar.neighbors.map((item, index) => {
+                const artists =
+                  item.track.artists.map((artist) => artist.name).join(", ") ||
+                  "Unknown artist";
+                const meta = [
+                  `${Math.round(item.similarity * 100)}%`,
+                  item.release_year,
+                  item.genres.length ? item.genres.join(", ") : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+
+                return (
+                  <li key={`${item.track.id}-${index}`} className="text-sm">
+                    <p>
+                      {item.track.name} — {artists}
+                    </p>
+                    <p className="mt-0.5 text-neutral-500">{meta}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {recommendations ? (
+        <section className="mt-8">
+          <h2 className="text-xl font-medium">New songs you might like</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Not in this playlist · scored against your tracks
+          </p>
+          {recommendations.length === 0 ? (
+            <p className="mt-4 text-sm text-neutral-500">
+              No new candidates found. Try a playlist with more artists.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {recommendations.map((item, index) => {
                 const artists =
                   item.track.artists.map((artist) => artist.name).join(", ") ||
                   "Unknown artist";

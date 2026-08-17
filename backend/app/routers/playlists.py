@@ -6,6 +6,7 @@ import httpx
 import asyncio
 import json
 
+from app.recommend import recommend_new_tracks
 from app.embed import embed_tracks, public_tracks
 from app.enrich import enrich_tracks
 from app.playlist_url import extract_playlist_id
@@ -166,6 +167,36 @@ async def similar_tracks(
     return {
         "track": public_tracks([query])[0],
         "neighbors": [_public_neighbor(score, item) for score, item in neighbors],
+    }
+
+
+@router.post("/spotify/recommend")
+async def recommend_tracks(
+    request: Request,
+    access_token: str = Depends(require_access_token),
+) -> dict:
+    session_id = session_id_from_request(request)
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    playlist = get_last_playlist(session_id)
+    if not playlist:
+        raise HTTPException(
+            status_code=404,
+            detail="No playlist in memory. Analyse a playlist first.",
+        )
+
+    try:
+        ranked = await recommend_new_tracks(access_token, playlist["tracks"])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Could not fetch recommendations.")
+
+    return {
+        "recommendations": [
+            _public_neighbor(item["similarity"], item) for item in ranked
+        ]
     }
 
 

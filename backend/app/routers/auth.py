@@ -108,6 +108,7 @@ async def spotify_login() -> RedirectResponse:
         "redirect_uri": SPOTIFY_REDIRECT_URI,
         "scope": SPOTIFY_SCOPES,
         "state": state,
+        "show_dialog": "true",
     }
     return RedirectResponse(
         f"{SPOTIFY_AUTHORIZE_URL}?{urlencode(params)}",

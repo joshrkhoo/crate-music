@@ -8,7 +8,7 @@ import httpx
 from app.config import SPOTIFY_API_BASE
 from app.embed import CACHE_DIR
 from app.spotify import _auth_headers
-from app.timing import log_stage, stage_elapsed, stage_start
+from app.timing import log_call, log_stage, stage_elapsed, stage_start
 
 log = logging.getLogger("crate.timing")
 
@@ -82,17 +82,34 @@ async def _spotify_get(
     headers: dict[str, str],
     *,
     params: dict | None = None,
+    label: str = "spotify GET",
 ) -> tuple[int, dict | None]:
+    rate_limits = 0
+    start = stage_start()
     for attempt in range(3):
         response = await client.get(url, headers=headers, params=params)
         if response.status_code == 429:
+            rate_limits += 1
             retry_after = float(response.headers.get("Retry-After", "1"))
+            log_call(
+                label,
+                status=429,
+                attempt=attempt + 1,
+                retry_after=retry_after,
+            )
             await asyncio.sleep(min(retry_after, 5))
             continue
+        log_call(
+            label,
+            status=response.status_code,
+            elapsed=f"{stage_elapsed(start):.2f}s",
+            rate_limits=rate_limits,
+        )
         if response.status_code >= 400:
             return response.status_code, None
         payload = response.json()
         return response.status_code, payload if isinstance(payload, dict) else None
+    log_call(label, status=429, elapsed=f"{stage_elapsed(start):.2f}s", rate_limits=rate_limits)
     return 429, None
 
 
@@ -130,6 +147,7 @@ async def _fetch_artists_batch(
             f"{SPOTIFY_API_BASE}/artists",
             headers,
             params={"ids": ",".join(chunk)},
+            label=f"analyse artist_batch ids={len(chunk)}",
         )
         if status in (403, 404):
             _batch_artists_blocked = True
@@ -213,6 +231,7 @@ async def enrich_tracks(
                     "name": track["name"],
                     "artists": track["artists"],
                     "album": track["album"],
+                    "image_url": track.get("image_url"),
                 },
                 "release_year": release_year(track.get("release_date")),
                 "genres": _merge_genres(track.get("artists") or [], artist_payloads),

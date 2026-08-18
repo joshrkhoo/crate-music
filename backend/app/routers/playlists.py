@@ -25,6 +25,7 @@ from app.spotify import (
     fetch_playlist,
     fetch_playlist_items_page,
     map_track,
+    playlist_image_url,
 )
 from app.timing import log_stage, stage_elapsed, stage_start
 
@@ -126,7 +127,9 @@ async def load_owned_playlists(access_token: str) -> list[dict]:
     return playlists
 
 
-async def load_playlist_tracks(access_token: str, playlist_id: str) -> tuple[str, list[dict]]:
+async def load_playlist_tracks(
+    access_token: str, playlist_id: str
+) -> tuple[str, str | None, list[dict]]:
     start = stage_start()
     meta = await fetch_playlist(access_token, playlist_id)
     if meta.status_code == 404:
@@ -138,6 +141,7 @@ async def load_playlist_tracks(access_token: str, playlist_id: str) -> tuple[str
 
     playlist = meta.json()
     name = playlist.get("name") or "Untitled playlist"
+    image_url = playlist_image_url(playlist)
     tracks: list[dict] = []
 
     async with httpx.AsyncClient(timeout=20) as client:
@@ -188,8 +192,14 @@ async def load_playlist_tracks(access_token: str, playlist_id: str) -> tuple[str
                     if mapped:
                         tracks.append(mapped)
 
-    log_stage("analyse playlist_fetch", stage_elapsed(start), tracks=len(tracks))
-    return name, await enrich_tracks(access_token, tracks)
+    log_stage(
+        "analyse playlist_fetch",
+        stage_elapsed(start),
+        tracks=len(tracks),
+        pages=1 + len(extra_offsets),
+        total=total,
+    )
+    return name, image_url, await enrich_tracks(access_token, tracks)
 
 
 @router.get("/spotify/playlists")
@@ -319,7 +329,7 @@ async def import_playlist(
 
     try:
         total_start = stage_start()
-        name, tracks = await load_playlist_tracks(access_token, playlist_id)
+        name, image_url, tracks = await load_playlist_tracks(access_token, playlist_id)
         log_stage("analyse total_sync", stage_elapsed(total_start), tracks=len(tracks))
     except HTTPException:
         raise
@@ -330,6 +340,7 @@ async def import_playlist(
     payload = {
         "id": playlist_id,
         "name": name,
+        "image_url": image_url,
         "tracks": tracks,
         "embeddings_ready": False,
     }
@@ -339,6 +350,7 @@ async def import_playlist(
     return {
         "id": playlist_id,
         "name": name,
+        "image_url": image_url,
         "tracks": public_tracks(tracks),
         "embeddings_ready": False,
     }

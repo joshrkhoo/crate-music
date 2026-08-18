@@ -32,6 +32,10 @@ def _model():
     return SentenceTransformer(MODEL_NAME)
 
 
+def warmup_model() -> None:
+    _model()
+
+
 def embed_tracks(tracks: list[dict]) -> list[dict]:
     if not tracks:
         return []

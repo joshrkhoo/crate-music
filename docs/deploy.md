@@ -31,13 +31,25 @@ Recommend can take 20–40 seconds. Do not put this backend on a 10s serverless 
 | `COOKIE_SECURE` | optional; defaults to true when `FRONTEND_URL` is `https://` |
 | `PORT` | set by Railway |
 
-`COOKIE_SECURE` and CORS both follow `FRONTEND_URL`. HTTPS frontend → secure cookies and CORS only for that origin. Local `http://127.0.0.1:3000` still allows `localhost` and `127.0.0.1`.
+`COOKIE_SECURE` defaults to true when `FRONTEND_URL` is `https://`. CORS always allows `FRONTEND_URL` plus local Next.js (`http://localhost:3000` and `http://127.0.0.1:3000`). Do not copy local `.env` onto Railway without changing `FRONTEND_URL` and `SPOTIFY_REDIRECT_URI` — those two must be the Vercel and Railway HTTPS URLs. After changing variables, restart the Railway service.
 
 Sessions stay in process memory. A Railway restart logs everyone out. That is expected for v1.
 
 ## 2. Vercel (frontend)
 
-Import the same repo. Set **root directory** to `frontend`.
+Import the same repo. In **Project Settings → General**:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `frontend` |
+| Framework Preset | **Next.js** (not Other / Vite) |
+| Build Command | `next build` |
+| Output Directory | **empty** — do not set `public` |
+| Install Command | `npm install` |
+
+Vercel must use the Next.js builder. If Output Directory is `public`, the Next.js build succeeds and then fails with “No Output Directory named public found.” `frontend/vercel.json` sets `"framework": "nextjs"` so that does not happen.
+
+Redeploy after changing these settings.
 
 ### Frontend env vars
 

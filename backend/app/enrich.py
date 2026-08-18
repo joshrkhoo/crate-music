@@ -8,8 +8,8 @@ from app.config import SPOTIFY_API_BASE
 from app.embed import CACHE_DIR
 from app.spotify import _auth_headers
 
-CONCURRENCY = 8
-ARTIST_FETCH_TIMEOUT = 5.0
+CONCURRENCY = 4
+ARTIST_FETCH_TIMEOUT = 4.0
 ARTIST_CACHE_DIR = CACHE_DIR / "artists"
 
 

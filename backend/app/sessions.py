@@ -97,6 +97,20 @@ def get_debug_playlist() -> dict[str, Any] | None:
     return _debug_playlist
 
 
+def embeddings_ready(playlist: dict[str, Any] | None) -> bool:
+    if not playlist:
+        return False
+    flag = playlist.get("embeddings_ready")
+    if flag is True:
+        return True
+    if flag is False:
+        return False
+    tracks = playlist.get("tracks") or []
+    if not tracks:
+        return False
+    return bool(tracks[0].get("metadata_embedding"))
+
+
 def remember_oauth_state(state: str) -> None:
     _pending_oauth[state] = time.time()
 

@@ -44,6 +44,7 @@ type PlaylistImport = {
   id: string;
   name: string;
   tracks: EnrichedTrack[];
+  embeddings_ready?: boolean;
 };
 
 function useLoadingDots(active: boolean) {
@@ -99,8 +100,10 @@ export default function Home() {
   const [recommendations, setRecommendations] = useState<SimilarNeighbor[] | null>(null);
   const [recommending, setRecommending] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(true);
+  const [indexing, setIndexing] = useState(false);
   const analysingDots = useLoadingDots(importing);
   const recommendingDots = useLoadingDots(recommending);
+  const indexingDots = useLoadingDots(indexing);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -165,6 +168,7 @@ export default function Home() {
       setSelectedTrackId(null);
       setSimilar(null);
       setRecommendations(null);
+      setIndexing(false);
       return;
     }
 
@@ -181,6 +185,44 @@ export default function Home() {
       });
   }, [user]);
 
+  useEffect(() => {
+    if (!indexing) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkStatus() {
+      try {
+        const response = await apiFetch("/spotify/playlist/status");
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        if (data.embedding_error) {
+          setIndexing(false);
+          setError("Could not build similarity index. Try Analyse again.");
+          return;
+        }
+        if (data.embeddings_ready) {
+          setIndexing(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIndexing(false);
+          setError("Could not reach the API. Is the backend running?");
+        }
+      }
+    }
+
+    checkStatus();
+    const interval = window.setInterval(checkStatus, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [indexing]);
+
   async function logout() {
     await apiFetch("/auth/logout", { method: "POST" });
     clearSessionId();
@@ -190,6 +232,7 @@ export default function Home() {
     setSelectedTrackId(null);
     setSimilar(null);
     setRecommendations(null);
+    setIndexing(false);
   }
 
   async function analysePlaylist(event: FormEvent) {
@@ -200,6 +243,7 @@ export default function Home() {
     setSelectedTrackId(null);
     setSimilar(null);
     setRecommendations(null);
+    setIndexing(false);
 
     try {
       const response = await apiFetch("/spotify/playlist", {
@@ -213,6 +257,7 @@ export default function Home() {
       }
       setImported(data as PlaylistImport);
       setPlaylistOpen(true);
+      setIndexing(data.embeddings_ready === false);
     } catch {
       setError("Could not reach the API. Is the backend running?");
     } finally {
@@ -221,6 +266,9 @@ export default function Home() {
   }
 
   async function showSimilar(trackId: string) {
+    if (indexing) {
+      return;
+    }
     setSelectedTrackId(trackId);
     setError(null);
     try {
@@ -357,12 +405,21 @@ export default function Home() {
         <section className="mt-8">
           <h2 className="text-xl font-medium">{imported.name}</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {imported.tracks.length} tracks · click a song to see the closest in this playlist
+            {imported.tracks.length} tracks
+            {indexing
+              ? " · building similarity index"
+              : " · click a song to see the closest in this playlist"}
           </p>
+          {indexing ? (
+            <p className="mt-2 text-sm text-neutral-500">
+              Indexing{indexingDots} Large playlists can take a few minutes. You can browse
+              tracks below; similar songs and recommendations unlock when this finishes.
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={recommendNewSongs}
-            disabled={recommending}
+            disabled={recommending || indexing}
             className="mt-4 rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
           >
             {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}
@@ -441,7 +498,8 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => showSimilar(item.track.id)}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+                        disabled={indexing}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:hover:bg-neutral-900 ${
                           selected ? "bg-neutral-100 dark:bg-neutral-900" : ""
                         }`}
                       >

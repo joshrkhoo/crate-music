@@ -75,7 +75,7 @@ async def recommend_new_tracks(access_token: str, playlist_tracks: list[dict]) -
     if not resolved:
         return []
 
-    enriched = await enrich_tracks(access_token, resolved, fetch_timeout=0)
+    enriched = await enrich_tracks(access_token, resolved, fetch_artists=False)
     embedded = await asyncio.to_thread(embed_tracks, enriched)
     ranked = max_similarity_to_playlist(playlist_tracks, embedded, limit=TOP_N)
     return [

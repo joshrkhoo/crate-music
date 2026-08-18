@@ -44,6 +44,8 @@ def embed_tracks(tracks: list[dict]) -> list[dict]:
         [metadata_text(track) for track in tracks],
         normalize_embeddings=True,
         convert_to_numpy=True,
+        batch_size=64,
+        show_progress_bar=False,
     )
     embedded: list[dict] = []
     for track, vector in zip(tracks, vectors, strict=True):

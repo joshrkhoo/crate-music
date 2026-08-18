@@ -416,19 +416,21 @@ export default function Home() {
               tracks below; similar songs and recommendations unlock when this finishes.
             </p>
           ) : null}
-          <button
-            type="button"
-            onClick={recommendNewSongs}
-            disabled={recommending || indexing}
-            className="mt-4 rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
-          >
-            {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}
-          </button>
-          {recommending ? (
-            <p className="mt-2 text-sm text-neutral-500">
-              Last.fm + Spotify search. Usually under 30 seconds.
-            </p>
-          ) : null}
+          <div className="mt-4 flex flex-col items-start gap-2">
+            <button
+              type="button"
+              onClick={recommendNewSongs}
+              disabled={recommending || indexing}
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
+            >
+              {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}
+            </button>
+            {recommending ? (
+              <p className="text-sm text-neutral-500">
+                Last.fm + Spotify search. Usually under 30 seconds.
+              </p>
+            ) : null}
+          </div>
 
           {recommendations ? (
             <div className="mt-6">
@@ -470,16 +472,18 @@ export default function Home() {
             </div>
           ) : null}
 
-          <button
-            type="button"
-            onClick={() => setPlaylistOpen((open) => !open)}
-            className="mt-6 text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-          >
-            {playlistOpen ? "Hide playlist" : "Show playlist"} · {imported.tracks.length} songs
-          </button>
+          <div className="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={() => setPlaylistOpen((open) => !open)}
+              className="text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+            >
+              {playlistOpen ? "Hide playlist" : "Show playlist"} · {imported.tracks.length}{" "}
+              songs
+            </button>
 
-          {playlistOpen ? (
-            <div className="playlist-scroll mt-3 max-h-72 overflow-y-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
+            {playlistOpen ? (
+              <div className="playlist-scroll mt-3 max-h-72 overflow-y-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
               <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
                 {imported.tracks.map((item, index) => {
                   const artists =
@@ -514,8 +518,9 @@ export default function Home() {
                   );
                 })}
               </ul>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
         </section>
       ) : null}
     </main>

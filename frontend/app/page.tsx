@@ -1,51 +1,25 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { apiFetch, clearSessionId, loginUrl, setSessionId } from "@/lib/api";
+import { AppFooter } from "@/components/app-footer";
+import { AppNav } from "@/components/app-nav";
+import { DiscoveryPanel } from "@/components/discovery-panel";
+import { LandingPage } from "@/components/landing-page";
+import { PlaylistHero } from "@/components/playlist-hero";
+import { PlaylistSidebar } from "@/components/playlist-sidebar";
+import { apiFetch, clearSessionId, setSessionId } from "@/lib/api";
+import type {
+  PlaylistImport,
+  PlaylistSummary,
+  SimilarNeighbor,
+  SimilarResponse,
+  SpotifyUser,
+} from "@/lib/types";
 
-type SpotifyUser = {
-  id: string;
-  display_name: string | null;
-  country: string | null;
-};
-
-type MeResponse =
+type MeResponseLocal =
   | { authenticated: false }
   | (SpotifyUser & { authenticated: true });
-
-type PlaylistSummary = {
-  id: string;
-  name: string;
-  track_count: number;
-};
-
-type Track = {
-  id: string;
-  name: string;
-  artists: { id: string; name: string }[];
-  album: string;
-};
-
-type EnrichedTrack = {
-  track: Track;
-  release_year: number | null;
-  genres: string[];
-};
-
-type SimilarNeighbor = EnrichedTrack & { similarity: number };
-
-type SimilarResponse = {
-  track: EnrichedTrack;
-  neighbors: SimilarNeighbor[];
-};
-
-type PlaylistImport = {
-  id: string;
-  name: string;
-  tracks: EnrichedTrack[];
-  embeddings_ready?: boolean;
-};
 
 function useLoadingDots(active: boolean) {
   const [dots, setDots] = useState(".");
@@ -67,27 +41,6 @@ function useLoadingDots(active: boolean) {
   return dots;
 }
 
-function NeighborRow({ item }: { item: SimilarNeighbor }) {
-  const artists =
-    item.track.artists.map((artist) => artist.name).join(", ") || "Unknown artist";
-  const meta = [
-    `${Math.round(item.similarity * 100)}%`,
-    item.release_year,
-    item.genres.length ? item.genres.join(", ") : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <li className="text-sm">
-      <p>
-        {item.track.name} — {artists}
-      </p>
-      <p className="mt-0.5 text-neutral-500">{meta}</p>
-    </li>
-  );
-}
-
 export default function Home() {
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,11 +52,13 @@ export default function Home() {
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
   const [recommendations, setRecommendations] = useState<SimilarNeighbor[] | null>(null);
   const [recommending, setRecommending] = useState(false);
-  const [playlistOpen, setPlaylistOpen] = useState(true);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [similarError, setSimilarError] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
   const analysingDots = useLoadingDots(importing);
   const recommendingDots = useLoadingDots(recommending);
   const indexingDots = useLoadingDots(indexing);
+  const similarRequestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -133,7 +88,7 @@ export default function Home() {
           setUser(null);
           return;
         }
-        const data = (await response.json()) as MeResponse;
+        const data = (await response.json()) as MeResponseLocal;
         if (data.authenticated) {
           setUser({
             id: data.id,
@@ -168,6 +123,8 @@ export default function Home() {
       setSelectedTrackId(null);
       setSimilar(null);
       setRecommendations(null);
+      setSimilarError(null);
+      setLoadingSimilar(false);
       setIndexing(false);
       return;
     }
@@ -223,6 +180,16 @@ export default function Home() {
     };
   }, [indexing]);
 
+  function resetPlaylistView() {
+    setImported(null);
+    setSelectedTrackId(null);
+    setSimilar(null);
+    setRecommendations(null);
+    setSimilarError(null);
+    setLoadingSimilar(false);
+    setIndexing(false);
+  }
+
   async function logout() {
     await apiFetch("/auth/logout", { method: "POST" });
     clearSessionId();
@@ -232,6 +199,8 @@ export default function Home() {
     setSelectedTrackId(null);
     setSimilar(null);
     setRecommendations(null);
+    setSimilarError(null);
+    setLoadingSimilar(false);
     setIndexing(false);
   }
 
@@ -243,6 +212,8 @@ export default function Home() {
     setSelectedTrackId(null);
     setSimilar(null);
     setRecommendations(null);
+    setSimilarError(null);
+    setLoadingSimilar(false);
     setIndexing(false);
 
     try {
@@ -256,7 +227,6 @@ export default function Home() {
         return;
       }
       setImported(data as PlaylistImport);
-      setPlaylistOpen(true);
       setIndexing(data.embeddings_ready === false);
     } catch {
       setError("Could not reach the API. Is the backend running?");
@@ -269,20 +239,51 @@ export default function Home() {
     if (indexing) {
       return;
     }
+    if (trackId === selectedTrackId && similar?.track.track.id === trackId && !similarError) {
+      return;
+    }
+
+    similarRequestRef.current?.abort();
+    const controller = new AbortController();
+    similarRequestRef.current = controller;
+
     setSelectedTrackId(trackId);
-    setError(null);
+    setSimilarError(null);
+    setLoadingSimilar(true);
+
     try {
-      const response = await apiFetch(`/spotify/similar/${trackId}`);
+      const response = await apiFetch(`/spotify/similar/${trackId}`, {
+        signal: controller.signal,
+      });
       const data = await response.json();
+      if (controller.signal.aborted) {
+        return;
+      }
       if (!response.ok) {
-        setSimilar(null);
-        setError(typeof data.detail === "string" ? data.detail : "Could not find similar tracks.");
+        const message =
+          typeof data.detail === "string" ? data.detail : "Could not find similar tracks.";
+        setSimilarError(message);
         return;
       }
       setSimilar(data as SimilarResponse);
-    } catch {
-      setSimilar(null);
-      setError("Could not reach the API. Is the backend running?");
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      if (controller.signal.aborted) {
+        return;
+      }
+      setSimilarError("Could not reach the API. Is the backend running?");
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoadingSimilar(false);
+      }
+    }
+  }
+
+  function retrySimilar() {
+    if (selectedTrackId) {
+      void showSimilar(selectedTrackId);
     }
   }
 
@@ -309,220 +310,87 @@ export default function Home() {
     }
   }
 
+  const userLabel = user?.display_name || user?.id || null;
+  const selectedTrack =
+    imported?.tracks.find((item) => item.track.id === selectedTrackId) ?? null;
+
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-2xl flex-1 flex-col justify-center px-6 py-16">
-      <p className="text-sm tracking-wide text-neutral-500 uppercase">crate</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-        Music discovery
-      </h1>
-      <p className="mt-3 text-neutral-500">
-        {user
-          ? "Import a playlist you own or collaborate on."
-          : "Connect Spotify to import one of your playlists."}
-      </p>
-
-      <div className="mt-10 rounded-2xl border border-neutral-200 p-6 dark:border-neutral-800">
-        {user ? (
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-neutral-500">Signed in as</p>
-              <p className="text-lg font-medium">
-                {user.display_name || user.id}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-            >
-              Log out
-            </button>
-          </div>
+    <>
+      {imported ? <AppNav userName={userLabel} /> : null}
+      <main
+        className={`mx-auto flex w-full flex-1 flex-col ${
+          imported ? "max-w-7xl px-6 py-6" : "min-h-[calc(100vh-0px)] bg-black"
+        }`}
+      >
+        {!imported ? (
+          <LandingPage
+            user={user}
+            userLabel={userLabel}
+            error={error}
+            playlists={playlists}
+            playlistUrl={playlistUrl}
+            importing={importing}
+            analysingDots={analysingDots}
+            onPlaylistUrlChange={setPlaylistUrl}
+            onAnalyse={analysePlaylist}
+            onLogout={logout}
+          />
         ) : (
-          <a
-            href={loginUrl()}
-            className="inline-flex rounded-full bg-[#1DB954] px-5 py-2.5 text-sm font-medium text-black hover:bg-[#1ed760]"
-          >
-            Connect Spotify
-          </a>
-        )}
+          <div className="space-y-6">
+            <PlaylistHero
+              name={imported.name}
+              trackCount={imported.tracks.length}
+              imageUrl={imported.image_url}
+              indexing={indexing}
+              recommending={recommending}
+              recommendingDots={recommendingDots}
+              onRecommend={recommendNewSongs}
+              recommendDisabled={recommending || indexing}
+            />
 
-        {user ? (
-          <form className="mt-6 space-y-4" onSubmit={analysePlaylist}>
-            {playlists.length > 0 ? (
-              <label className="block text-sm">
-                <span className="text-neutral-500">Your playlists</span>
-                <select
-                  className="mt-1 w-full rounded-xl border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
-                  value=""
-                  onChange={(event) => {
-                    const playlist = playlists.find((item) => item.id === event.target.value);
-                    if (playlist) {
-                      setPlaylistUrl(`https://open.spotify.com/playlist/${playlist.id}`);
-                    }
-                  }}
-                >
-                  <option value="">Choose a playlist</option>
-                  {playlists.map((playlist) => (
-                    <option key={playlist.id} value={playlist.id}>
-                      {playlist.name} ({playlist.track_count})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <p className="text-sm text-neutral-500">
-                No owned or collaborative playlists found. Paste a URL to one you own.
-              </p>
-            )}
+            {indexing ? (
+              <p className="text-sm text-muted-foreground">Indexing{indexingDots}</p>
+            ) : null}
 
-            <label className="block text-sm">
-              <span className="text-neutral-500">Playlist URL</span>
-              <input
-                type="text"
-                required
-                value={playlistUrl}
-                onChange={(event) => setPlaylistUrl(event.target.value)}
-                placeholder="https://open.spotify.com/playlist/..."
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
+            {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+            <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+              <PlaylistSidebar
+                tracks={imported.tracks}
+                selectedTrackId={selectedTrackId}
+                indexing={indexing}
+                onSelectTrack={showSimilar}
               />
-            </label>
 
-            <button
-              type="submit"
-              disabled={importing}
-              className="rounded-full bg-[#1DB954] px-5 py-2.5 text-sm font-medium text-black hover:bg-[#1ed760] disabled:opacity-60"
-            >
-              {importing ? `Analysing${analysingDots}` : "Analyse"}
-            </button>
-          </form>
-        ) : null}
-
-        {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}
-      </div>
-
-      {imported ? (
-        <section className="mt-8">
-          <h2 className="text-xl font-medium">{imported.name}</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            {imported.tracks.length} tracks
-            {indexing
-              ? " · building similarity index"
-              : " · click a song to see the closest in this playlist"}
-          </p>
-          {indexing ? (
-            <p className="mt-2 text-sm text-neutral-500">
-              Indexing{indexingDots} Large playlists can take a few minutes. You can browse
-              tracks below; similar songs and recommendations unlock when this finishes.
-            </p>
-          ) : null}
-          <div className="mt-4 flex flex-col items-start gap-2">
-            <button
-              type="button"
-              onClick={recommendNewSongs}
-              disabled={recommending || indexing}
-              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900"
-            >
-              {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}
-            </button>
-            {recommending ? (
-              <p className="text-sm text-neutral-500">
-                Last.fm + Spotify search. Usually under 30 seconds.
-              </p>
-            ) : null}
-          </div>
-
-          {recommendations ? (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium">New songs you might like</h3>
-              <p className="mt-1 text-sm text-neutral-500">
-                Not in this playlist · scored against your tracks
-              </p>
-              {recommendations.length === 0 ? (
-                <p className="mt-4 text-sm text-neutral-500">
-                  No new candidates found. Try a playlist with more artists.
-                </p>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {recommendations.map((item, index) => (
-                    <NeighborRow key={`${item.track.id}-${index}`} item={item} />
-                  ))}
-                </ul>
-              )}
+              <DiscoveryPanel
+                selectedTrack={selectedTrack}
+                similar={similar}
+                recommendations={recommendations}
+                indexing={indexing}
+                loadingSimilar={loadingSimilar}
+                recommending={recommending}
+                similarError={similarError}
+                onRetrySimilar={retrySimilar}
+                onRetryRecommend={recommendNewSongs}
+              />
             </div>
-          ) : null}
 
-          {similar ? (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium">Closest in this playlist</h3>
-              <p className="mt-1 text-sm text-neutral-500">
-                to {similar.track.track.name}
-              </p>
-              {similar.neighbors.length === 0 ? (
-                <p className="mt-4 text-sm text-neutral-500">
-                  Need at least two tracks to compare.
-                </p>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {similar.neighbors.map((item, index) => (
-                    <NeighborRow key={`${item.track.id}-${index}`} item={item} />
-                  ))}
-                </ul>
-              )}
+            <div className="flex justify-end gap-4 text-sm text-muted-foreground">
+              <button
+                type="button"
+                onClick={resetPlaylistView}
+                className="hover:text-foreground"
+              >
+                Change playlist
+              </button>
+              <button type="button" onClick={logout} className="hover:text-foreground">
+                Log out
+              </button>
             </div>
-          ) : null}
-
-          <div className="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-800">
-            <button
-              type="button"
-              onClick={() => setPlaylistOpen((open) => !open)}
-              className="text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-            >
-              {playlistOpen ? "Hide playlist" : "Show playlist"} · {imported.tracks.length}{" "}
-              songs
-            </button>
-
-            {playlistOpen ? (
-              <div className="playlist-scroll mt-3 max-h-72 overflow-y-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
-              <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                {imported.tracks.map((item, index) => {
-                  const artists =
-                    item.track.artists.map((artist) => artist.name).join(", ") ||
-                    "Unknown artist";
-                  const meta = [
-                    item.release_year,
-                    item.genres.length ? item.genres.join(", ") : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ");
-                  const selected = selectedTrackId === item.track.id;
-
-                  return (
-                    <li key={`${item.track.id}-${index}`}>
-                      <button
-                        type="button"
-                        onClick={() => showSimilar(item.track.id)}
-                        disabled={indexing}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:hover:bg-neutral-900 ${
-                          selected ? "bg-neutral-100 dark:bg-neutral-900" : ""
-                        }`}
-                      >
-                        <p>
-                          {item.track.name} — {artists}
-                        </p>
-                        {meta ? (
-                          <p className="mt-0.5 text-neutral-500">{meta}</p>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              </div>
-            ) : null}
           </div>
-        </section>
-      ) : null}
-    </main>
+        )}
+      </main>
+      {imported ? <AppFooter /> : null}
+    </>
   );
 }

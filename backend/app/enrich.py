@@ -147,7 +147,7 @@ async def enrich_tracks(
     )
     artist_payloads = _load_cached_artists(artist_ids)
     missing_ids = [artist_id for artist_id in artist_ids if artist_id not in artist_payloads]
-    if missing_ids:
+    if missing_ids and fetch_timeout != 0:
         artist_payloads.update(
             await _fetch_artists(access_token, missing_ids, timeout=fetch_timeout)
         )

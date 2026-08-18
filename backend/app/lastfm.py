@@ -9,11 +9,11 @@ from app.config import LASTFM_API_URL
 
 SEED_ARTISTS = 8
 SIMILAR_ARTISTS = 5
-TOP_TRACKS = 4
+TOP_TRACKS = 8
 
 
 def lastfm_api_key() -> str:
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     return os.getenv("LASTFM_API_KEY", "").strip()
 
 
@@ -36,6 +36,7 @@ async def _lastfm_get(client: httpx.AsyncClient, method: str, artist: str, extra
             "artist": artist,
             "api_key": api_key,
             "format": "json",
+            "autocorrect": "1",
             **extra,
         },
         headers={"User-Agent": "crate-music/0.1"},
@@ -140,7 +141,7 @@ async def candidate_track_refs(playlist_tracks: list[dict]) -> list[tuple[str, s
     similar: list[str] = []
     semaphore = asyncio.Semaphore(4)
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=8) as client:
 
         async def fetch_similar(artist: str) -> list[str]:
             async with semaphore:
@@ -153,8 +154,8 @@ async def candidate_track_refs(playlist_tracks: list[dict]) -> list[tuple[str, s
             similar.extend(names)
 
         unique_artists: list[str] = []
-        seen_artists: set[str] = {name.lower() for name in seeds}
-        for name in similar:
+        seen_artists: set[str] = set()
+        for name in [*similar, *seeds]:
             key = name.lower()
             if key in seen_artists:
                 continue

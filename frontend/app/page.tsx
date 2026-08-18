@@ -66,6 +66,27 @@ function useLoadingDots(active: boolean) {
   return dots;
 }
 
+function NeighborRow({ item }: { item: SimilarNeighbor }) {
+  const artists =
+    item.track.artists.map((artist) => artist.name).join(", ") || "Unknown artist";
+  const meta = [
+    `${Math.round(item.similarity * 100)}%`,
+    item.release_year,
+    item.genres.length ? item.genres.join(", ") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <li className="text-sm">
+      <p>
+        {item.track.name} — {artists}
+      </p>
+      <p className="mt-0.5 text-neutral-500">{meta}</p>
+    </li>
+  );
+}
+
 export default function Home() {
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +98,7 @@ export default function Home() {
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
   const [recommendations, setRecommendations] = useState<SimilarNeighbor[] | null>(null);
   const [recommending, setRecommending] = useState(false);
+  const [playlistOpen, setPlaylistOpen] = useState(true);
   const analysingDots = useLoadingDots(importing);
   const recommendingDots = useLoadingDots(recommending);
 
@@ -190,6 +212,7 @@ export default function Home() {
         return;
       }
       setImported(data as PlaylistImport);
+      setPlaylistOpen(true);
     } catch {
       setError("Could not reach the API. Is the backend running?");
     } finally {
@@ -346,118 +369,95 @@ export default function Home() {
           </button>
           {recommending ? (
             <p className="mt-2 text-sm text-neutral-500">
-              Last.fm + Spotify search. First run can take 20–40 seconds.
+              Last.fm + Spotify search. Usually under 30 seconds.
             </p>
           ) : null}
-          <ul className="mt-4 space-y-3">
-            {imported.tracks.map((item, index) => {
-              const artists =
-                item.track.artists.map((artist) => artist.name).join(", ") ||
-                "Unknown artist";
-              const meta = [
-                item.release_year,
-                item.genres.length ? item.genres.join(", ") : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              const selected = selectedTrackId === item.track.id;
 
-              return (
-                <li key={`${item.track.id}-${index}`}>
-                  <button
-                    type="button"
-                    onClick={() => showSimilar(item.track.id)}
-                    className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
-                      selected ? "bg-neutral-100 dark:bg-neutral-900" : ""
-                    }`}
-                  >
-                    <p>
-                      {item.track.name} — {artists}
-                    </p>
-                    {meta ? (
-                      <p className="mt-0.5 text-neutral-500">{meta}</p>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+          {recommendations ? (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium">New songs you might like</h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                Not in this playlist · scored against your tracks
+              </p>
+              {recommendations.length === 0 ? (
+                <p className="mt-4 text-sm text-neutral-500">
+                  No new candidates found. Try a playlist with more artists.
+                </p>
+              ) : (
+                <ul className="mt-4 space-y-3">
+                  {recommendations.map((item, index) => (
+                    <NeighborRow key={`${item.track.id}-${index}`} item={item} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
 
-      {similar ? (
-        <section className="mt-8">
-          <h2 className="text-xl font-medium">Closest in this playlist</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            to {similar.track.track.name}
-          </p>
-          {similar.neighbors.length === 0 ? (
-            <p className="mt-4 text-sm text-neutral-500">
-              Need at least two tracks to compare.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {similar.neighbors.map((item, index) => {
-                const artists =
-                  item.track.artists.map((artist) => artist.name).join(", ") ||
-                  "Unknown artist";
-                const meta = [
-                  `${Math.round(item.similarity * 100)}%`,
-                  item.release_year,
-                  item.genres.length ? item.genres.join(", ") : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
+          {similar ? (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium">Closest in this playlist</h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                to {similar.track.track.name}
+              </p>
+              {similar.neighbors.length === 0 ? (
+                <p className="mt-4 text-sm text-neutral-500">
+                  Need at least two tracks to compare.
+                </p>
+              ) : (
+                <ul className="mt-4 space-y-3">
+                  {similar.neighbors.map((item, index) => (
+                    <NeighborRow key={`${item.track.id}-${index}`} item={item} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
 
-                return (
-                  <li key={`${item.track.id}-${index}`} className="text-sm">
-                    <p>
-                      {item.track.name} — {artists}
-                    </p>
-                    <p className="mt-0.5 text-neutral-500">{meta}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      ) : null}
+          <button
+            type="button"
+            onClick={() => setPlaylistOpen((open) => !open)}
+            className="mt-6 text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+          >
+            {playlistOpen ? "Hide playlist" : "Show playlist"} · {imported.tracks.length} songs
+          </button>
 
-      {recommendations ? (
-        <section className="mt-8">
-          <h2 className="text-xl font-medium">New songs you might like</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Not in this playlist · scored against your tracks
-          </p>
-          {recommendations.length === 0 ? (
-            <p className="mt-4 text-sm text-neutral-500">
-              No new candidates found. Try a playlist with more artists.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {recommendations.map((item, index) => {
-                const artists =
-                  item.track.artists.map((artist) => artist.name).join(", ") ||
-                  "Unknown artist";
-                const meta = [
-                  `${Math.round(item.similarity * 100)}%`,
-                  item.release_year,
-                  item.genres.length ? item.genres.join(", ") : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
+          {playlistOpen ? (
+            <div className="playlist-scroll mt-3 max-h-72 overflow-y-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
+              <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                {imported.tracks.map((item, index) => {
+                  const artists =
+                    item.track.artists.map((artist) => artist.name).join(", ") ||
+                    "Unknown artist";
+                  const meta = [
+                    item.release_year,
+                    item.genres.length ? item.genres.join(", ") : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const selected = selectedTrackId === item.track.id;
 
-                return (
-                  <li key={`${item.track.id}-${index}`} className="text-sm">
-                    <p>
-                      {item.track.name} — {artists}
-                    </p>
-                    <p className="mt-0.5 text-neutral-500">{meta}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                  return (
+                    <li key={`${item.track.id}-${index}`}>
+                      <button
+                        type="button"
+                        onClick={() => showSimilar(item.track.id)}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+                          selected ? "bg-neutral-100 dark:bg-neutral-900" : ""
+                        }`}
+                      >
+                        <p>
+                          {item.track.name} — {artists}
+                        </p>
+                        {meta ? (
+                          <p className="mt-0.5 text-neutral-500">{meta}</p>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </main>

@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 import time
 
@@ -182,12 +183,20 @@ async def search_track(
         return None
     query = f'track:"{name}" artist:"{artist}"'
 
-    async def _search(http: httpx.AsyncClient) -> dict | None:
+    async def _search(http: httpx.AsyncClient, q: str) -> dict | None:
         response = await http.get(
             f"{SPOTIFY_API_BASE}/search",
             headers=_auth_headers(access_token),
-            params={"q": query, "type": "track", "limit": 1},
+            params={"q": q, "type": "track", "limit": 1},
         )
+        if response.status_code == 429:
+            retry_after = float(response.headers.get("Retry-After", "1"))
+            await asyncio.sleep(min(retry_after, 1))
+            response = await http.get(
+                f"{SPOTIFY_API_BASE}/search",
+                headers=_auth_headers(access_token),
+                params={"q": q, "type": "track", "limit": 1},
+            )
         if response.status_code >= 400:
             return None
         items = ((response.json().get("tracks") or {}).get("items") or [])
@@ -196,6 +205,6 @@ async def search_track(
         return map_spotify_track(items[0])
 
     if client is None:
-        async with httpx.AsyncClient(timeout=20) as owned:
-            return await _search(owned)
-    return await _search(client)
+        async with httpx.AsyncClient(timeout=10) as owned:
+            return await _search(owned, query)
+    return await _search(client, query)

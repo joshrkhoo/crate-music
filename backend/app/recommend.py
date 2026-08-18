@@ -8,7 +8,8 @@ from app.lastfm import candidate_track_refs, lastfm_api_key
 from app.similarity import max_similarity_to_playlist
 from app.spotify import search_track
 
-MAX_RESOLVE = 80
+MAX_RESOLVE = 40
+SEARCH_SECONDS = 20
 TOP_N = 10
 
 
@@ -47,13 +48,25 @@ async def recommend_new_tracks(access_token: str, playlist_tracks: list[dict]) -
     semaphore = asyncio.Semaphore(4)
     resolved: list[dict] = []
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=10) as client:
 
         async def resolve(name: str, artist: str) -> dict | None:
             async with semaphore:
                 return await search_track(access_token, name, artist, client)
 
-        for mapped in await asyncio.gather(*(resolve(name, artist) for name, artist in filtered)):
+        tasks = [
+            asyncio.create_task(resolve(name, artist)) for name, artist in filtered
+        ]
+        done, pending = await asyncio.wait(tasks, timeout=SEARCH_SECONDS)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in done:
+            if task.cancelled() or task.exception():
+                continue
+            mapped = task.result()
             if not mapped or mapped["id"] in owned_ids:
                 continue
             owned_ids.add(mapped["id"])
@@ -62,7 +75,7 @@ async def recommend_new_tracks(access_token: str, playlist_tracks: list[dict]) -
     if not resolved:
         return []
 
-    enriched = await enrich_tracks(access_token, resolved)
+    enriched = await enrich_tracks(access_token, resolved, fetch_timeout=0)
     embedded = await asyncio.to_thread(embed_tracks, enriched)
     ranked = max_similarity_to_playlist(playlist_tracks, embedded, limit=TOP_N)
     return [

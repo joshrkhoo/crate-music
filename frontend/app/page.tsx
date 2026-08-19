@@ -59,6 +59,7 @@ export default function Home() {
   const recommendingDots = useLoadingDots(recommending);
   const indexingDots = useLoadingDots(indexing);
   const similarRequestRef = useRef<AbortController | null>(null);
+  const discoveryRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -251,6 +252,12 @@ export default function Home() {
     setSimilarError(null);
     setLoadingSimilar(true);
 
+    if (window.innerWidth < 1024) {
+      window.requestAnimationFrame(() => {
+        discoveryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+
     try {
       const response = await apiFetch(`/spotify/similar/${trackId}`, {
         signal: controller.signal,
@@ -316,10 +323,10 @@ export default function Home() {
 
   return (
     <>
-      {imported ? <AppNav userName={userLabel} /> : null}
+      {imported ? <AppNav userName={userLabel} onLogout={logout} /> : null}
       <main
-        className={`mx-auto flex w-full flex-1 flex-col ${
-          imported ? "max-w-7xl px-6 py-6" : "min-h-[calc(100vh-0px)] bg-black"
+        className={`mx-auto flex w-full min-w-0 flex-1 flex-col ${
+          imported ? "max-w-7xl px-4 py-4 sm:px-6 sm:py-6" : "min-h-[calc(100vh-0px)] bg-black"
         }`}
       >
         {!imported ? (
@@ -336,12 +343,13 @@ export default function Home() {
             onLogout={logout}
           />
         ) : (
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-4 sm:space-y-6">
             <PlaylistHero
               name={imported.name}
               trackCount={imported.tracks.length}
               imageUrl={imported.image_url}
               indexing={indexing}
+              indexingDots={indexingDots}
               recommending={recommending}
               recommendingDots={recommendingDots}
               onRecommend={recommendNewSongs}
@@ -354,39 +362,37 @@ export default function Home() {
 
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-            <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
-              <PlaylistSidebar
-                tracks={imported.tracks}
-                selectedTrackId={selectedTrackId}
-                indexing={indexing}
-                onSelectTrack={showSimilar}
-              />
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+              <div className={`min-w-0 ${selectedTrackId ? "order-2" : "order-1"} lg:order-1`}>
+                <PlaylistSidebar
+                  tracks={imported.tracks}
+                  playlistId={imported.id}
+                  selectedTrackId={selectedTrackId}
+                  indexing={indexing}
+                  onSelectTrack={showSimilar}
+                  onChangePlaylist={resetPlaylistView}
+                />
+              </div>
 
-              <DiscoveryPanel
-                selectedTrack={selectedTrack}
-                similar={similar}
-                recommendations={recommendations}
-                indexing={indexing}
-                loadingSimilar={loadingSimilar}
-                recommending={recommending}
-                similarError={similarError}
-                onRetrySimilar={retrySimilar}
-                onRetryRecommend={recommendNewSongs}
-              />
-            </div>
-
-            <div className="flex justify-end gap-4 text-sm text-muted-foreground">
-              <button
-                type="button"
-                onClick={resetPlaylistView}
-                className="hover:text-foreground"
+              <div
+                ref={discoveryRef}
+                className={`min-w-0 scroll-mt-4 ${selectedTrackId ? "order-1" : "order-2"} lg:order-2`}
               >
-                Change playlist
-              </button>
-              <button type="button" onClick={logout} className="hover:text-foreground">
-                Log out
-              </button>
+                <DiscoveryPanel
+                  selectedTrack={selectedTrack}
+                  similar={similar}
+                  recommendations={recommendations}
+                  indexing={indexing}
+                  indexingDots={indexingDots}
+                  loadingSimilar={loadingSimilar}
+                  recommending={recommending}
+                  similarError={similarError}
+                  onRetrySimilar={retrySimilar}
+                  onRetryRecommend={recommendNewSongs}
+                />
+              </div>
             </div>
+
           </div>
         )}
       </main>

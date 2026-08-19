@@ -12,13 +12,13 @@ export function SimilarTrackCard({ item }: SimilarTrackCardProps) {
   const genre = item.genres[0];
 
   return (
-    <article className="crate-surface w-[11.5rem] p-3">
+    <article className="crate-surface w-[9.5rem] shrink-0 p-2.5 sm:w-[11.5rem] sm:p-3">
       <div className="overflow-hidden rounded-md">
         <AlbumArt
           src={item.track.image_url}
           alt={`${item.track.name} cover`}
           size="md"
-          className="!size-[8.5rem]"
+          className="!size-[8rem] sm:!size-[8.5rem]"
         />
       </div>
       <div className="mt-3 min-w-0">

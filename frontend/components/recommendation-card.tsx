@@ -9,7 +9,7 @@ export function RecommendationCard({ item }: RecommendationCardProps) {
   const artists = formatArtists(item.track.artists);
 
   return (
-    <article className="crate-surface flex w-[18rem] items-center gap-3 p-3">
+    <article className="crate-surface flex w-[16.5rem] shrink-0 items-center gap-3 p-3 sm:w-[18rem]">
       <AlbumArt
         src={item.track.image_url}
         alt={`${item.track.name} cover`}

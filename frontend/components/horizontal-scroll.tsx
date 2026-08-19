@@ -16,7 +16,7 @@ export function HorizontalScroll({ children, className = "" }: HorizontalScrollP
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative min-w-0 max-w-full overflow-hidden ${className}`}>
       <button
         type="button"
         onClick={() => scrollBy(-280)}

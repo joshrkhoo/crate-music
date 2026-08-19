@@ -9,6 +9,7 @@ type DiscoveryPanelProps = {
   similar: SimilarResponse | null;
   recommendations: SimilarNeighbor[] | null;
   indexing: boolean;
+  indexingDots?: string;
   loadingSimilar: boolean;
   recommending: boolean;
   similarError: string | null;
@@ -26,7 +27,7 @@ function SparkleIcon() {
 
 function NeighborSkeletonCard() {
   return (
-    <div className="crate-surface w-[11.5rem] animate-pulse p-3">
+    <div className="crate-surface w-[9.5rem] shrink-0 animate-pulse p-2.5 sm:w-[11.5rem] sm:p-3">
       <div className="aspect-square rounded-md bg-neutral-800" />
       <div className="mt-3 space-y-2">
         <div className="h-3.5 w-3/4 rounded bg-neutral-800" />
@@ -43,6 +44,7 @@ export function DiscoveryPanel({
   similar,
   recommendations,
   indexing,
+  indexingDots = "...",
   loadingSimilar,
   recommending,
   similarError,
@@ -68,7 +70,7 @@ export function DiscoveryPanel({
     loadingSimilar && !similar && displayedNeighbors.length === 0 && !similarError;
 
   return (
-    <div className="crate-surface flex min-h-[32rem] flex-col space-y-6 rounded-lg p-5 sm:p-6">
+    <div className="crate-surface flex min-h-0 min-w-0 flex-col space-y-4 overflow-hidden rounded-lg p-4 sm:min-h-[28rem] sm:space-y-6 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="crate-section-label">
           <SparkleIcon />
@@ -88,31 +90,42 @@ export function DiscoveryPanel({
       </div>
 
       {showEmptyPrompt ? (
-        <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center py-8 text-center sm:py-12">
           <p className="text-sm text-muted-foreground">
-            {indexing ? "Building similarity index…" : "Pick a track from your playlist"}
+            {indexing ? (
+              <>
+                Building similarity index
+                <span className="inline-block w-[1.25em] text-left">{indexingDots}</span>
+              </>
+            ) : (
+              "Pick a track from your playlist"
+            )}
           </p>
           <p className="mt-2 max-w-sm text-xs text-muted-foreground">
             {indexing
-              ? "Browse tracks on the left while indexing finishes."
+              ? "Browse tracks in your playlist while indexing finishes."
               : "Select any song to see closest matches and discover new tracks."}
           </p>
         </div>
       ) : (
         <>
           {heroTrack ? (
-            <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end">
+            <div className="flex flex-row items-center gap-3 border-b border-border pb-4 sm:items-end sm:gap-4 sm:pb-6">
               <AlbumArt
                 src={heroTrack.track.image_url}
                 alt={`${heroTitle} cover`}
-                size="xl"
-                className="shadow-lg shadow-black/40"
+                size="md"
+                className="shadow-lg shadow-black/40 sm:size-28 sm:h-28 sm:w-28 lg:size-44 lg:h-44 lg:w-44"
               />
               <div className="min-w-0">
-                <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">{heroTitle}</h3>
-                <p className="mt-1 text-muted-foreground">{heroArtists}</p>
+                <h3 className="truncate text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
+                  {heroTitle}
+                </h3>
+                <p className="mt-0.5 truncate text-sm text-muted-foreground sm:mt-1 sm:text-base">
+                  {heroArtists}
+                </p>
                 {primaryGenre ? (
-                  <span className="crate-genre-accent mt-3 inline-flex">{primaryGenre}</span>
+                  <span className="crate-genre-accent mt-2 inline-flex sm:mt-3">{primaryGenre}</span>
                 ) : null}
               </div>
             </div>
@@ -134,7 +147,7 @@ export function DiscoveryPanel({
           ) : null}
 
           {heroTrack && !similarError ? (
-            <section aria-busy={loadingSimilar} className="min-h-[15rem]">
+            <section aria-busy={loadingSimilar} className="min-h-0 sm:min-h-[15rem]">
               <div className="flex items-center gap-3">
                 <div>
                   <h4 className="text-sm font-semibold">Closest in this playlist</h4>
@@ -145,7 +158,7 @@ export function DiscoveryPanel({
                 ) : null}
               </div>
 
-              <div className="relative mt-4 min-h-[12.5rem]">
+              <div className="relative mt-3 min-h-0 sm:mt-4 sm:min-h-[12.5rem]">
                 {showInitialNeighborSkeleton ? (
                   <HorizontalScroll>
                     {Array.from({ length: 4 }, (_, index) => (

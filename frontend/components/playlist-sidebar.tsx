@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
-
 import { AlbumArt } from "@/components/album-art";
 import { EnrichedTrack, formatArtists } from "@/lib/types";
 
 type PlaylistSidebarProps = {
   tracks: EnrichedTrack[];
+  playlistId?: string;
   selectedTrackId: string | null;
   indexing: boolean;
   onSelectTrack: (trackId: string) => void;
+  onChangePlaylist?: () => void;
 };
 
 function EqualizerIcon() {
@@ -23,16 +23,17 @@ function EqualizerIcon() {
   );
 }
 
-const COLLAPSED_COUNT = 8;
-
 export function PlaylistSidebar({
   tracks,
+  playlistId,
   selectedTrackId,
   indexing,
   onSelectTrack,
+  onChangePlaylist,
 }: PlaylistSidebarProps) {
-  const [expanded, setExpanded] = useState(false);
-  const visibleTracks = expanded ? tracks : tracks.slice(0, COLLAPSED_COUNT);
+  const spotifyUrl = playlistId
+    ? `https://open.spotify.com/playlist/${playlistId}`
+    : null;
 
   return (
     <aside className="crate-surface flex flex-col overflow-hidden">
@@ -45,9 +46,9 @@ export function PlaylistSidebar({
         {tracks.length} tracks
       </div>
 
-      <div className={`playlist-scroll flex-1 ${expanded ? "max-h-[28rem]" : ""} overflow-y-auto`}>
+      <div className="playlist-scroll max-h-[28rem] flex-1 overflow-y-auto">
         <ul className="p-2">
-          {visibleTracks.map((item, index) => {
+          {tracks.map((item, index) => {
             const selected = selectedTrackId === item.track.id;
             const artists = formatArtists(item.track.artists);
 
@@ -85,16 +86,40 @@ export function PlaylistSidebar({
         </ul>
       </div>
 
-      {tracks.length > COLLAPSED_COUNT ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="flex items-center justify-center gap-1 border-t border-border px-4 py-3 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {expanded ? "Show less" : "View full playlist"}
-          <span aria-hidden>{expanded ? "↑" : "→"}</span>
-        </button>
-      ) : null}
+      <div className="flex items-center border-t border-border">
+        {spotifyUrl ? (
+          <a
+            href={spotifyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-3.5" aria-hidden>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <path d="M15 3h6v6" />
+              <path d="M10 14 21 3" />
+            </svg>
+            Open in Spotify
+          </a>
+        ) : null}
+        {onChangePlaylist ? (
+          <button
+            type="button"
+            onClick={onChangePlaylist}
+            className={`flex items-center justify-center gap-1 px-4 py-3 text-xs text-muted-foreground hover:text-foreground ${
+              spotifyUrl ? "border-l border-border" : "flex-1"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-3.5" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M3 21v-5h5" />
+            </svg>
+            Change
+          </button>
+        ) : null}
+      </div>
     </aside>
   );
 }

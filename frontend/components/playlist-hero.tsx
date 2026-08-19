@@ -5,6 +5,7 @@ type PlaylistHeroProps = {
   trackCount: number;
   imageUrl?: string | null;
   indexing: boolean;
+  indexingDots?: string;
   recommending: boolean;
   recommendingDots: string;
   onRecommend: () => void;
@@ -24,6 +25,7 @@ export function PlaylistHero({
   trackCount,
   imageUrl,
   indexing,
+  indexingDots = "...",
   recommending,
   recommendingDots,
   onRecommend,
@@ -44,24 +46,30 @@ export function PlaylistHero({
         <div className="absolute inset-0 bg-card" aria-hidden />
       )}
 
-      <div className="relative flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:p-8">
+      <div className="relative flex flex-row items-end gap-3 p-4 sm:gap-5 sm:p-8">
         <AlbumArt
           src={imageUrl}
           alt={`${name} cover`}
-          size="lg"
-          className="shadow-2xl shadow-black/50"
+          size="md"
+          className="shadow-2xl shadow-black/50 sm:size-40 sm:h-40 sm:w-40"
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{name}</h2>
+          <h2 className="text-xl font-bold tracking-tight sm:text-3xl lg:text-4xl">{name}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {trackCount} tracks
-            {indexing ? " · indexing…" : null}
+            {indexing ? (
+              <>
+                {" "}
+                · indexing
+                <span className="inline-block w-[1.25em] text-left">{indexingDots}</span>
+              </>
+            ) : null}
           </p>
           <button
             type="button"
             onClick={onRecommend}
             disabled={recommendDisabled}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-spotify px-5 py-2.5 text-sm font-semibold text-black hover:bg-[#1ed760] disabled:opacity-60"
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-spotify px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#1ed760] disabled:opacity-60 sm:mt-5 sm:w-auto sm:px-5"
           >
             <SpotifyIcon />
             {recommending ? `Finding new songs${recommendingDots}` : "Recommend new songs"}

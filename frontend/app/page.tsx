@@ -55,6 +55,7 @@ export default function Home() {
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [similarError, setSimilarError] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
+  const [ready, setReady] = useState(false);
   const analysingDots = useLoadingDots(importing);
   const recommendingDots = useLoadingDots(recommending);
   const indexingDots = useLoadingDots(indexing);
@@ -76,44 +77,80 @@ export default function Home() {
       window.history.replaceState({}, "", "/");
     }
 
-    const controller = new AbortController();
-    let timedOut = false;
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 4000);
+    let cancelled = false;
 
-    apiFetch("/auth/me", { signal: controller.signal })
-      .then(async (response) => {
+    (async () => {
+      try {
+        const response = await Promise.race([
+          apiFetch("/auth/me"),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 4000),
+          ),
+        ]);
+        if (cancelled) return;
         if (!response.ok) {
           setUser(null);
+          setReady(true);
           return;
         }
         const data = (await response.json()) as MeResponseLocal;
-        if (data.authenticated) {
-          setUser({
-            id: data.id,
-            display_name: data.display_name,
-            country: data.country,
-          });
-        } else {
+        if (cancelled) return;
+        if (!data.authenticated) {
           setUser(null);
-        }
-      })
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          if (timedOut) {
-            setError("Could not reach the API. Is the backend running?");
-          }
+          setReady(true);
           return;
         }
+        const authedUser: SpotifyUser = {
+          id: data.id,
+          display_name: data.display_name,
+          country: data.country,
+        };
+
+        let restoredPlaylist: PlaylistImport | null = null;
+        let restoredSimilar: SimilarResponse | null = null;
+        let restoredRecommendations: SimilarNeighbor[] | null = null;
+        try {
+          const restoreRes = await apiFetch("/spotify/playlist/restore");
+          if (cancelled) return;
+          if (restoreRes.ok) {
+            const restoreData = (await restoreRes.json()) as {
+              playlist: PlaylistImport | null;
+              last_similar: SimilarResponse | null;
+              last_recommendations: SimilarNeighbor[] | null;
+            };
+            if (restoreData.playlist && restoreData.playlist.tracks.length > 0) {
+              restoredPlaylist = restoreData.playlist;
+            }
+            restoredSimilar = restoreData.last_similar ?? null;
+            restoredRecommendations = restoreData.last_recommendations ?? null;
+          }
+        } catch {}
+
+        if (cancelled) return;
+        setUser(authedUser);
+        if (restoredPlaylist) {
+          setImported(restoredPlaylist);
+          if (!restoredPlaylist.embeddings_ready) {
+            setIndexing(true);
+          }
+        }
+        if (restoredSimilar) {
+          setSimilar(restoredSimilar);
+          setSelectedTrackId(restoredSimilar.track.track.id);
+        }
+        if (restoredRecommendations && restoredRecommendations.length > 0) {
+          setRecommendations(restoredRecommendations);
+        }
+        setReady(true);
+      } catch {
+        if (cancelled) return;
         setError("Could not reach the API. Is the backend running?");
-      })
-      .finally(() => window.clearTimeout(timeout));
+        setReady(true);
+      }
+    })();
 
     return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
+      cancelled = true;
     };
   }, []);
 
@@ -320,6 +357,10 @@ export default function Home() {
   const userLabel = user?.display_name || user?.id || null;
   const selectedTrack =
     imported?.tracks.find((item) => item.track.id === selectedTrackId) ?? null;
+
+  if (!ready) {
+    return <div className="min-h-screen bg-black" />;
+  }
 
   return (
     <>

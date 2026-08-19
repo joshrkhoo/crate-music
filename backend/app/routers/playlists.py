@@ -16,6 +16,7 @@ from app.sessions import (
     embeddings_ready,
     get_debug_playlist,
     get_last_playlist,
+    store_discovery,
     store_last_playlist,
 )
 from app.similarity import nearest_in_playlist
@@ -234,6 +235,30 @@ async def playlist_status(request: Request) -> dict:
     }
 
 
+@router.get("/spotify/playlist/restore")
+async def restore_playlist(request: Request) -> dict:
+    session_id = session_id_from_request(request)
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    playlist = get_last_playlist(session_id)
+    if not playlist:
+        return {"playlist": None}
+
+    result: dict = {
+        "playlist": {
+            "id": playlist.get("id"),
+            "name": playlist.get("name"),
+            "image_url": playlist.get("image_url"),
+            "tracks": public_tracks(playlist.get("tracks") or []),
+            "embeddings_ready": embeddings_ready(playlist),
+        },
+        "last_similar": playlist.get("last_similar"),
+        "last_recommendations": playlist.get("last_recommendations"),
+    }
+    return result
+
+
 @router.get("/embeddings")
 async def view_embeddings() -> Response:
     playlist = get_debug_playlist()
@@ -286,10 +311,12 @@ async def similar_tracks(
     except KeyError:
         raise HTTPException(status_code=404, detail="That track is not in the analysed playlist.")
 
-    return {
+    result = {
         "track": public_tracks([query])[0],
         "neighbors": [_public_neighbor(score, item) for score, item in neighbors],
     }
+    store_discovery(session_id, "last_similar", result)
+    return result
 
 
 @router.post("/spotify/recommend")
@@ -310,11 +337,9 @@ async def recommend_tracks(
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Could not fetch recommendations.")
 
-    return {
-        "recommendations": [
-            _public_neighbor(item["similarity"], item) for item in ranked
-        ]
-    }
+    recs = [_public_neighbor(item["similarity"], item) for item in ranked]
+    store_discovery(session_id, "last_recommendations", recs)
+    return {"recommendations": recs}
 
 
 @router.post("/spotify/playlist")

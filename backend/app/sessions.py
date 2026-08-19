@@ -97,6 +97,23 @@ def get_debug_playlist() -> dict[str, Any] | None:
     return _debug_playlist
 
 
+def store_discovery(session_id: str | None, key: str, value: Any) -> None:
+    if not session_id:
+        return
+    playlist = get_last_playlist(session_id)
+    if not playlist:
+        return
+    playlist[key] = value
+    store_last_playlist(session_id, playlist)
+
+
+def get_discovery(session_id: str | None, key: str) -> Any:
+    playlist = get_last_playlist(session_id)
+    if not playlist:
+        return None
+    return playlist.get(key)
+
+
 def embeddings_ready(playlist: dict[str, Any] | None) -> bool:
     if not playlist:
         return False

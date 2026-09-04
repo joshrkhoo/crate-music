@@ -70,7 +70,7 @@ npm install
 npm run dev
 ```
 
-The app runs on `http://localhost:3000`.
+The app runs on `https://crate-music-theta.vercel.app`.
 
 ## Project structure
 

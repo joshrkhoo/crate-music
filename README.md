@@ -6,7 +6,7 @@
 
 Crate is a music discovery app that reads one of your Spotify playlists, works out what each track "is" with sentence embeddings, and uses that to find the closest tracks inside the playlist and new songs outside it.
 
-[**Live app →**](https://crate-music-theta.vercel.app)
+[**Live app → crate.joshrkhoo.com**](https://crate.joshrkhoo.com)
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-20232a?logo=react&logoColor=61dafb)
